@@ -5,7 +5,11 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
+import org.tensorflow.lite.DataType;
+import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.support.image.TensorImage;
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -13,12 +17,21 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import com.example.leafify.ml.Model;
+import com.example.leafify.ml.PotatoDisease;
+
+import org.tensorflow.lite.support.image.TensorImage;
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -41,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
         result = findViewById(R.id.result);
         imageView = findViewById(R.id.imageView);
 
+        //select image button
         selectBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -50,6 +64,8 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(intent,10);
             }
         });
+
+        //capture image with camera button
         captureBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -57,10 +73,45 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(intent,12);
             }
         });
+
+        predictBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                try {
+                    Model model = Model.newInstance(MainActivity.this);
+
+                    // Creates inputs for reference.
+                    TensorBuffer inputFeature0 = TensorBuffer.createFixedSize(new int[]{1, 190, 190, 3}, DataType.FLOAT32);
+                    bitmap= Bitmap.createScaledBitmap(bitmap, 380,380,true);
+                    ByteBuffer byteBuffer = TensorImage.fromBitmap(bitmap).getBuffer();
+                    Log.d("shape", byteBuffer.toString());
+                    Log.d("shape", inputFeature0.getBuffer().toString());
+                    inputFeature0.loadBuffer(byteBuffer);
+
+                    // Runs model inference and gets result.
+                    Model.Outputs outputs = model.process(inputFeature0);
+                    TensorBuffer outputFeature0 = outputs.getOutputFeature0AsTensorBuffer();
+                    String[] arr = getResources().getStringArray(R.array.result_labels);
+                    result.setText(arr[getMax(outputFeature0.getFloatArray())]);
+
+                    // Releases model resources if no longer used.
+                    model.close();
+                } catch (IOException e) {
+                    // TODO Handle the exception
+                    e.printStackTrace();
+                }
+            }
+        });
     }
 
+    int getMax(float[] arr){
+        int max=0;
+        for(int i=0;i<arr.length; i++)
+            if(arr[i]>arr[max]) max=i;
+        return max;
+    }
 
-
+    //permission of camera
     void getPermission(){
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
             if(checkSelfPermission(Manifest.permission.CAMERA)!= PackageManager.PERMISSION_GRANTED){
